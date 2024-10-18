@@ -1,0 +1,10 @@
+go 1.23.2
+
+use (
+	./cmd/smartway
+	./api/emploeeManagment
+	./internal/app
+	./internal/dbservice
+	./internal/handlers
+	./internal/middleware
+)
