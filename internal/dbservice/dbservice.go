@@ -7,7 +7,7 @@ import (
 
 	em "github.com/IiMDMiI/smartway/api/emploeeManagment"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 func init() {
@@ -27,11 +27,16 @@ func init() {
 	psqlInfo = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
 }
 
-var (
-	psqlInfo string
+const (
+	FOREIGN_KEY_VIOLATION = "23503"
 )
 
-type DBInterface interface {
+var (
+	psqlInfo               string
+	ErrForeignKeyViolation = fmt.Errorf("foreign key violation")
+)
+
+type DBService interface {
 	CreateEmployee(emp *em.Employee) (int, error)
 	DeleteEmployee(id int) error
 	UpdateEmployee(emp *em.Employee) error
@@ -40,7 +45,7 @@ type DBInterface interface {
 	Close()
 }
 
-func New() DBInterface {
+func New() DBService {
 	db, err := sql.Open("postgres", psqlInfo)
 	if err != nil {
 		log.Fatal("Error connecting to the database: ", err)
@@ -53,7 +58,6 @@ type DB struct {
 	db *sql.DB
 }
 
-// Close implements DBInterface.
 func (db *DB) Close() {
 	db.db.Close()
 }
@@ -65,7 +69,7 @@ func (db *DB) CreateEmployee(emp *em.Employee) (int, error) {
 	var id int
 	err := row.Scan(&id)
 	if err != nil {
-		return id, err
+		return id, db.clarifyDBEror(err)
 	}
 
 	_, err = db.db.Exec(`INSERT INTO passport (type, number, employeeid) VALUES($1,$2,$3)`,
@@ -73,7 +77,7 @@ func (db *DB) CreateEmployee(emp *em.Employee) (int, error) {
 		emp.Passport.Number,
 		id)
 	if err != nil {
-		return id, err
+		return id, db.clarifyDBEror(err)
 	}
 
 	return id, nil
@@ -94,7 +98,7 @@ func (db *DB) UpdateEmployee(emp *em.Employee) error {
 		WHERE id = $6`,
 		emp.Name, emp.Surname, emp.Phone, emp.CompanyId, emp.Department.Name, emp.Id)
 	if err != nil {
-		return err
+		return db.clarifyDBEror(err)
 	}
 
 	_, err = db.db.Exec(`UPDATE passport SET
@@ -104,7 +108,7 @@ func (db *DB) UpdateEmployee(emp *em.Employee) error {
 		emp.Passport.Type, emp.Passport.Number, emp.Id)
 
 	if err != nil {
-		return err
+		return db.clarifyDBEror(err)
 	}
 
 	return nil
@@ -152,4 +156,14 @@ func (db *DB) rowsToEmps(rows *sql.Rows) ([]em.Employee, error) {
 		emps = append(emps, emp)
 	}
 	return emps, nil
+}
+
+func (db *DB) clarifyDBEror(err error) error {
+	if pqErr, ok := err.(*pq.Error); ok {
+		if pqErr.Code == FOREIGN_KEY_VIOLATION {
+			return ErrForeignKeyViolation
+		}
+	}
+	log.Println(err)
+	return err
 }

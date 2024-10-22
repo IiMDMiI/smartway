@@ -3,9 +3,9 @@ package app
 import (
 	"net/http"
 
+	"github.com/IiMDMiI/smartway/internal/dbservice"
 	"github.com/IiMDMiI/smartway/internal/handlers"
-
-	_ "github.com/lib/pq"
+	er "github.com/IiMDMiI/smartway/internal/repositories/employeesRepository"
 )
 
 type App struct {
@@ -16,7 +16,11 @@ func New() *App {
 }
 
 func (a *App) Run() error {
-	handlers.SetRoutes()
+	db := dbservice.New()
+	defer db.Close()
+
+	emploeesRepository := er.New(db)
+	handlers.SetUp(emploeesRepository)
 
 	port := ":8080"
 	println("Server is running on port", port)

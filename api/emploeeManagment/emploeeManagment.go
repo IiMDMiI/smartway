@@ -1,5 +1,9 @@
 package employeeManagement
 
+const (
+	UnfilledId = -1
+)
+
 type Employee struct {
 	Id         int
 	Name       string
@@ -18,4 +22,11 @@ type Passport struct {
 type Department struct {
 	Name  string
 	Phone string
+}
+
+func NewEmptyEmploee() *Employee {
+	emp := Employee{}
+	emp.Id = UnfilledId
+	emp.CompanyId = UnfilledId
+	return &emp
 }

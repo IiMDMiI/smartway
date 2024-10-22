@@ -2,63 +2,55 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 
 	em "github.com/IiMDMiI/smartway/api/emploeeManagment"
-	"github.com/IiMDMiI/smartway/internal/dbservice"
 	mw "github.com/IiMDMiI/smartway/internal/middleware"
-
-	"github.com/lib/pq"
+	er "github.com/IiMDMiI/smartway/internal/repositories/employeesRepository"
 )
 
 const (
 	UNEXPECTED_EROR = "Unexpected eror"
 )
 
-var (
-	valid mw.Validator
-	auth  mw.Authorizer
-)
+var empsRep er.EmploeesRepositoryService
 
-func init() {
-	valid = mw.NewValidator()
-	auth = mw.NewAuthorizer()
+func SetUp(newUsersRep er.EmploeesRepositoryService) {
+	empsRep = newUsersRep
+	setRoutes()
 }
 
-func SetRoutes() {
+func setRoutes() {
 	prefix := "/api/v1"
 
-	http.HandleFunc("POST "+prefix+"/emploee", CreateEmployee)
-	http.HandleFunc("DELETE "+prefix+"/emploee", DeleteEmployee)
-	http.HandleFunc("PUT "+prefix+"/emploee", UpdateEmployee)
+	http.Handle("POST "+prefix+"/emploee", mw.NewAuth(http.HandlerFunc(CreateEmployee)))
+	http.Handle("DELETE "+prefix+"/emploee", mw.NewAuth(http.HandlerFunc(DeleteEmployee)))
+	http.Handle("PUT "+prefix+"/emploee", mw.NewAuth(http.HandlerFunc(UpdateEmployee)))
 
 	http.HandleFunc("GET "+prefix+"/emploees", GetCompanyEmployees)
 }
 
 func CreateEmployee(w http.ResponseWriter, r *http.Request) {
-	emp, status, err := mw.AuthorizeAndValidate(auth, valid, r)
-	if err != nil {
-		http.Error(w, err.Error(), status)
+	emp := em.NewEmptyEmploee()
+
+	if err := json.NewDecoder(r.Body).Decode(&emp); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	db := dbservice.New()
-	defer db.Close()
-
-	id, err := db.CreateEmployee(emp)
+	id, err := empsRep.Create(emp)
 	if err != nil {
-
-		if pqErr, ok := err.(*pq.Error); ok {
-			if pqErr.Code == "23503" {
-				http.Error(w, "The company or department doesn't exist", http.StatusBadRequest)
-				return
-			}
+		if errors.Is(err, er.ErrBadCompanyIdOrBadDepart) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		} else if errors.Is(err, er.ErrValidation) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-		log.Println(err)
-		http.Error(w, UNEXPECTED_EROR, http.StatusInternalServerError)
 		return
 	}
 
@@ -66,64 +58,38 @@ func CreateEmployee(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteEmployee(w http.ResponseWriter, r *http.Request) {
-	if err := auth.Authorize(r); err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
-
 	id, err := strconv.Atoi(r.URL.Query().Get("id"))
 	if err != nil {
 		http.Error(w, "ID is required and must be an integer", http.StatusBadRequest)
 		return
 	}
-
-	db := dbservice.New()
-	defer db.Close()
-	db.DeleteEmployee(id)
-
-	fmt.Fprintf(w, "Emploee deleted\n")
+	if err2 := empsRep.Delete(id); err2 != nil {
+		http.Error(w, err2.Error(), http.StatusBadRequest)
+		return
+	}
+	fmt.Fprintf(w, "Employee deleted\n")
 }
 
 func UpdateEmployee(w http.ResponseWriter, r *http.Request) {
-	if err := auth.Authorize(r); err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
-
-	var emp em.Employee
+	emp := em.NewEmptyEmploee()
 	if err := json.NewDecoder(r.Body).Decode(&emp); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if emp.Id == 0 {
-		http.Error(w, "Id is required", http.StatusBadRequest)
-		return
-	}
-	if emp.Phone != "" {
-		if err := valid.ValidatePhone(emp.Phone); err != nil {
+
+	if err := empsRep.Update(emp); err != nil {
+		if errors.Is(err, er.ErrMissingCompanyId) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+		} else if errors.Is(err, er.ErrBadPhoneNumberFormat) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		} else {
+			http.Error(w, UNEXPECTED_EROR, http.StatusBadRequest)
+			log.Println(err)
 		}
-	}
-
-	db := dbservice.New()
-	defer db.Close()
-
-	err := db.UpdateEmployee(&emp)
-	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok {
-			if pqErr.Code == "23503" {
-				http.Error(w, "The company or department doesn't exist", http.StatusBadRequest)
-				return
-			}
-		}
-		log.Println(err)
-		http.Error(w, UNEXPECTED_EROR, http.StatusInternalServerError)
 		return
 	}
 
 	fmt.Fprint(w, "Emploee updated")
-	fmt.Printf("Emploee updated\n")
 }
 
 func GetCompanyEmployees(w http.ResponseWriter, r *http.Request) {
@@ -133,16 +99,14 @@ func GetCompanyEmployees(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := dbservice.New()
-	defer db.Close()
 	var emps []em.Employee
 	var err2 error
 
 	dep := r.URL.Query().Get("dep")
 	if dep == "" {
-		emps, err2 = db.GetCompanyEmployees(id)
+		emps, err2 = empsRep.GetCompanyEmployees(id)
 	} else {
-		emps, err2 = db.GetDepartmentEmployees(id, dep)
+		emps, err2 = empsRep.GetDepartmentEmployees(id, dep)
 	}
 
 	shouldReturn := handleGetEmpsDBErrors(err2, w, emps)

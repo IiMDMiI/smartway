@@ -3,36 +3,23 @@ package middleware
 import (
 	"errors"
 	"net/http"
-
-	em "github.com/IiMDMiI/smartway/api/emploeeManagment"
 )
 
-func AuthorizeAndValidate(auth Authorizer, valid Validator, r *http.Request) (*em.Employee, int, error) {
-	if err := auth.Authorize(r); err != nil {
-		return nil, http.StatusUnauthorized, err
-	}
-
-	emp, err := valid.Validate(r)
-	if err != nil {
-		return nil, http.StatusBadRequest, err
-	}
-	return emp, http.StatusOK, nil
-}
-
-type Authorizer interface {
-	Authorize(r *http.Request) error
-}
-
-func NewAuthorizer() Authorizer {
-	return &TokenAuthorizer{}
-}
-
 type TokenAuthorizer struct {
+	handler http.Handler
 }
 
-func (ta *TokenAuthorizer) Authorize(r *http.Request) error {
+func NewAuth(handlerToWrap http.Handler) *TokenAuthorizer {
+	return &TokenAuthorizer{handlerToWrap}
+}
+
+func (t *TokenAuthorizer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	token := r.Header.Get("Authorization")
-	return ta.tokenExists(&token)
+	if err := t.tokenExists(&token); err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	t.handler.ServeHTTP(w, r)
 }
 
 // TODO: get tocken from DB
