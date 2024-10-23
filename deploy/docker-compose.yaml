@@ -1,16 +1,26 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:smartway
     container_name: postgres
     restart: always
     env_file:
-      - .env
+      - db/.env
     ports:
       - "5432:5432"
     volumes:
       - griff_db_data:/var/lib/postgresql/data
+
+  goserver:
+    image: goserver:smartway
+    container_name: goserver
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    
 
 volumes:
   griff_db_data:
