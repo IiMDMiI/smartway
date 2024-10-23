@@ -155,6 +155,9 @@ func (db *DB) rowsToEmps(rows *sql.Rows) ([]em.Employee, error) {
 		}
 		emps = append(emps, emp)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return emps, nil
 }
 
