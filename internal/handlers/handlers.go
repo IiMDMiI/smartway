@@ -44,11 +44,12 @@ func CreateEmployee(w http.ResponseWriter, r *http.Request) {
 
 	id, err := empsRep.Create(emp)
 	if err != nil {
-		if errors.Is(err, er.ErrBadCompanyIdOrBadDepart) {
+		switch {
+		case errors.Is(err, er.ErrBadCompanyIdOrBadDepart):
 			http.Error(w, err.Error(), http.StatusBadRequest)
-		} else if errors.Is(err, er.ErrValidation) {
+		case errors.Is(err, er.ErrValidation):
 			http.Error(w, err.Error(), http.StatusBadRequest)
-		} else {
+		default:
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
@@ -78,11 +79,14 @@ func UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := empsRep.Update(emp); err != nil {
-		if errors.Is(err, er.ErrMissingCompanyId) {
+		switch {
+		case errors.Is(err, er.ErrMissingCompanyId):
 			http.Error(w, err.Error(), http.StatusBadRequest)
-		} else if errors.Is(err, er.ErrBadPhoneNumberFormat) {
+		case errors.Is(err, er.ErrBadPhoneNumberFormat):
 			http.Error(w, err.Error(), http.StatusBadRequest)
-		} else {
+		case errors.Is(err, er.ErrBadCompanyIdOrBadDepart):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
 			http.Error(w, UNEXPECTED_EROR, http.StatusBadRequest)
 			log.Println(err)
 		}
