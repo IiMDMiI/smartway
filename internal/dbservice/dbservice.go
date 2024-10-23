@@ -111,7 +111,8 @@ func (db *DB) UpdateEmployee(emp *em.Employee) error {
 }
 
 func (db *DB) GetCompanyEmployees(companyId int) ([]em.Employee, error) {
-	rows, err := db.db.Query(`SELECT e.*, d.phone AS dep_phone, p.type, p.number
+	rows, err := db.db.Query(`SELECT e.id, e.name, e.surname, e.phone, e.companyid, e.departmentname,
+		d.phone AS dep_phone, p.type, p.number
 		FROM employee e
 		JOIN department d ON e.departmentname = d.name AND e.companyid = d.companyid
 		JOIN passport p ON p.employeeid = e.id
@@ -125,7 +126,8 @@ func (db *DB) GetCompanyEmployees(companyId int) ([]em.Employee, error) {
 }
 
 func (db *DB) GetDepartmentEmployees(companyId int, department string) ([]em.Employee, error) {
-	rows, err := db.db.Query(`SELECT e.*, d.phone AS dep_phone, p.type, p.number
+	rows, err := db.db.Query(`SELECT e.id, e.name, e.surname, e.phone, e.companyid, e.departmentname,
+	    d.phone AS dep_phone, p.type, p.number
 		FROM employee e
 		JOIN department d ON e.departmentname = d.name AND e.companyid = d.companyid
 		JOIN passport p ON p.employeeid = e.id
