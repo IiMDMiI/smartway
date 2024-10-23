@@ -89,26 +89,22 @@ func (db *DB) DeleteEmployee(id int) error {
 }
 
 func (db *DB) UpdateEmployee(emp *em.Employee) error {
-	_, err := db.db.Exec(`UPDATE employee SET
-		name = CASE WHEN $1 != '' THEN $1 ELSE name END,
-		surname = CASE WHEN $2 != '' THEN $2 ELSE surname END,
-		phone = CASE WHEN $3 != '' THEN $3 ELSE phone END,
-		companyid = CASE WHEN $4 != 0 THEN $4 ELSE companyid END,
-		departmentname = CASE WHEN $5 != '' THEN $5 ELSE departmentname END
-		WHERE id = $6`,
-		emp.Name, emp.Surname, emp.Phone, emp.CompanyId, emp.Department.Name, emp.Id)
-	if err != nil {
-		return db.clarifyDBEror(err)
+	empArgs := createEmploeeArgs(emp)
+	if len(empArgs) > 0 {
+		empQuery := createUpdateQuery("employee", empArgs, fmt.Sprintf("id = %d", emp.Id))
+
+		_, err := db.db.Exec(empQuery)
+		if err != nil {
+			return db.clarifyDBEror(err)
+		}
 	}
 
-	_, err = db.db.Exec(`UPDATE passport SET
-		type = CASE WHEN $1 != '' THEN $1 ELSE type END,
-		number = CASE WHEN $2 != '' THEN $2 ELSE number END
-		WHERE employeeid = $3`,
-		emp.Passport.Type, emp.Passport.Number, emp.Id)
+	passArgs := createPassportArgs(&emp.Passport)
+	if len(passArgs) > 0 {
+		passQuery := createUpdateQuery("passport", passArgs, fmt.Sprintf("employeeid = %d", emp.Id))
 
-	if err != nil {
-		return db.clarifyDBEror(err)
+		_, err := db.db.Exec(passQuery)
+		return err
 	}
 
 	return nil
